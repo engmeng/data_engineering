@@ -6,7 +6,7 @@ This repo is for learning data engineering via the Data Engineering ZoomCamp. Th
 3. For the repo, I will be doing it directly on GitHub instead of Azure DevOps. This is to reduce the cost for me for my private Azure. 
 
 # Architecture
-<img src="image.png" alt="Architecture" style="width:50%; height:auto;">
+<img src="image.png" alt="Architecture" style="width:100%; height:auto;">
 
 # Task
 
