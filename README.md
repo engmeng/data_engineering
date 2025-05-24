@@ -9,5 +9,5 @@ This repo is for learning data engineering via the Data Engineering ZoomCamp. Th
 <img src="image.png" alt="Architecture" style="width:100%; height:auto;">
 
 # Task
-
+To build a working data engineering pipeline based on Dagster, DBT, lakefs and containerize and deploy using AKS
 
