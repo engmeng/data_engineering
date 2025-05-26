@@ -2,3 +2,4 @@
 .env
 .venv
 *.parquet
+__pycache__
