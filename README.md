@@ -11,6 +11,10 @@ This repo is for learning data engineering via the Data Engineering ZoomCamp. Th
 # Task
 To build a working data engineering pipeline based on Dagster, DBT, lakefs and containerize and deploy using AKS. We will use the ADLSG2 as the database.
 
+So we want to do http requests to download the files first. The files can be seperated to yellow and green cabs. This will have to be done seperately. We will also perfom backfill for 3 months and then load the data into a duckdb table. In addition, we will see how to load the data into the lakefs as well!
+
+The duckdb is connected using the resources.py file, this allows us to reuse the information.
+
 # Structure
 Since the project can get very complicated, we will be grouping all the assets under the assets folder, so stuff like trips and metrics can be kept seperate. This helps to make things more readable and modular. In addition, for the constants, we will be using the constants.py file. This helps in centralizing the information and prevents us from having to hardcode the paths and variables within the code itself. 
 
