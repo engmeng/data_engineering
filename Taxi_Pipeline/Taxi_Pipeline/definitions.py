@@ -1,9 +1,11 @@
+import dagster as dg
 from dagster import Definitions, load_assets_from_modules
 
-from data_engineering.Taxi_Pipeline.Taxi_Pipeline.assets import assets 
+from data_engineering.Taxi_Pipeline.Taxi_Pipeline.assets import trips 
 
-all_assets = load_assets_from_modules([assets])
+trip_assets = dg.load_assets_from_modules([trips])
 
 defs = Definitions(
-    assets=all_assets,
+    assets=trip_assets,
+    group_name="Raw Loading"
 )
