@@ -11,4 +11,9 @@ This repo is for learning data engineering via the Data Engineering ZoomCamp. Th
 # Task
 To build a working data engineering pipeline based on Dagster, DBT, lakefs and containerize and deploy using AKS. We will use the ADLSG2 as the database.
 
+# Structure
+Since the project can get very complicated, we will be grouping all the assets under the assets folder, so stuff like trips and metrics can be kept seperate. This helps to make things more readable and modular. In addition, for the constants, we will be using the constants.py file. This helps in centralizing the information and prevents us from having to hardcode the paths and variables within the code itself. 
+
+We will have 2 flows, one to load into the local pipeline and the other to push into the Azure Datalake Gen2 storage. This is important as we want to be able to load data into both the local and cloud storage. Within the cloud storage, we will be implementing LakeFS to perform the version control of the data. In addition to the LakeFS, we can also implement a delta lake structure to take advantage of how the data is being stored and for us to perform historical rollbacks. 
+
 
