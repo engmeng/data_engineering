@@ -85,7 +85,7 @@ def green_taxi_trips_file(context: dg.AssetExecutionContext) -> dg.MaterializeRe
     group_name="Local_Database",
     compute_kind="DuckDB",
 )
-def yellow_taxi_trips(context: dg.AssetExecutionContext, database: DuckDBResource) -> None:
+def yellow_taxi_trips(context: dg.AssetExecutionContext, database: DuckDBResource) -> dg.MaterializeResult:
     """
       The raw taxi trips dataset, loaded into a DuckDB database
     """
@@ -113,10 +113,21 @@ def yellow_taxi_trips(context: dg.AssetExecutionContext, database: DuckDBResourc
       'yellow' AS partition_type
       FROM '{constants.YELLOW_TAXI_TRIPS_TEMPLATE_FILE_PATH.format(month_to_fetch)}';
     """
-
+    preview_query = "SELECT * from yellow_trips limit 10"
 # So now instead of establishing the connections via the getenv part, we can run it using the resources instead
     with database.get_connection() as conn:
       conn.execute(query)
+      preview_df = conn.execute(preview_query).fetchdf()
+      row_count = conn.execute("SELECT COUNT(*) from yellow_trips").fetchone()
+      count = row_count[0] if row_count else 0
+      
+# We also want to be able to view the information from the table directly
+    return dg.MaterializeResult(
+        metadata={
+            "row_count": dg.MetadataValue.int(count),
+            "preview": dg.MetadataValue.md(preview_df.to_markdown(index=False)),
+        }
+    )
       
 @dg.asset(
     deps=["green_taxi_trips_file"],
@@ -124,7 +135,7 @@ def yellow_taxi_trips(context: dg.AssetExecutionContext, database: DuckDBResourc
     group_name="Local_Database",
     compute_kind="DuckDB",
 )
-def green_taxi_trips(context: dg.AssetExecutionContext, database: DuckDBResource) -> None:
+def green_taxi_trips(context: dg.AssetExecutionContext, database: DuckDBResource) -> dg.MaterializeResult:
     """
       The raw taxi trips dataset, loaded into a DuckDB database
     """
@@ -158,7 +169,18 @@ def green_taxi_trips(context: dg.AssetExecutionContext, database: DuckDBResource
       '{month_to_fetch}' as partition_date,'green' AS partition_type
       FROM '{constants.GREEN_TAXI_TRIPS_TEMPLATE_FILE_PATH.format(month_to_fetch)}';
     """
-
+    preview_query = "SELECT * from green_trips limit 10"
 # So now instead of establishing the connections via the getenv part, we can run it using the resources instead
     with database.get_connection() as conn:
       conn.execute(query)
+      preview_df = conn.execute(preview_query).fetchdf()
+      row_count = conn.execute("SELECT COUNT(*) from green_trips").fetchone()
+      count = row_count[0] if row_count else 0
+      
+# We also want to be able to view the information from the table directly
+    return dg.MaterializeResult(
+        metadata={
+            "row_count": dg.MetadataValue.int(count),
+            "preview": dg.MetadataValue.md(preview_df.to_markdown(index=False)),
+        }
+    )
