@@ -6,6 +6,8 @@ import duckdb
 import os
 import pandas as pd
 from dagster_duckdb import DuckDBResource
+from dagster_azure.adls2 import ADLS2Resource, ADLS2SASToken
+from azure.storage.filedatalake import DataLakeFileClient
 
 @dg.asset(
   partitions_def = monthly_partition,
@@ -45,7 +47,7 @@ def yellow_taxi_trips_file(context: dg.AssetExecutionContext) -> dg.MaterializeR
   group_name="Raw_Files",
   compute_kind="Python",
   )
-def green_taxi_trips_file(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
+def green_taxi_trips_file(context: dg.AssetExecutionContext, adls2: ADLS2Resource) -> dg.MaterializeResult:
     """
       The raw parquet files for the green taxi trips dataset.
     """
@@ -65,12 +67,21 @@ def green_taxi_trips_file(context: dg.AssetExecutionContext) -> dg.MaterializeRe
         
     num_rows = len(pd.read_parquet(constants.GREEN_TAXI_TRIPS_TEMPLATE_FILE_PATH.format(month_to_fetch)))
 
+    # Using the env to load the credentials to upload data to the ADLS2 
+    file_client = adls2.adls2_client.get_file_client(
+        file_system='data',
+        file_path=f'input_data/green_tripdata_{month_to_fetch}.parquet'
+    )
+    
+    # You need to use content, cause raw trips takes the get request only and not the file itself 
+    file_client.upload_data(raw_trips.content, overwrite=True)
+
     return dg.MaterializeResult(
       metadata={
                 'Number of records': dg.MetadataValue.int(num_rows)
             }
         )
-    
+        
 # After getting the raw files, we can push them into postgres or duckdb
 # For this we will be using duckdb first
 # We can dockerize and push to postgres as well!
