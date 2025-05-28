@@ -47,7 +47,7 @@ def yellow_taxi_trips_file(context: dg.AssetExecutionContext) -> dg.MaterializeR
   group_name="Raw_Files",
   compute_kind="Python",
   )
-def green_taxi_trips_file(context: dg.AssetExecutionContext, adls2: ADLS2Resource) -> dg.MaterializeResult:
+def green_taxi_trips_file(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
     """
       The raw parquet files for the green taxi trips dataset.
     """
@@ -60,21 +60,11 @@ def green_taxi_trips_file(context: dg.AssetExecutionContext, adls2: ADLS2Resourc
         f"https://d37ci6vzurychx.cloudfront.net/trip-data/green_tripdata_{month_to_fetch}.parquet"
     )
     
-    
     # Save the parquet file 
     with open(constants.GREEN_TAXI_TRIPS_TEMPLATE_FILE_PATH.format(month_to_fetch), "wb") as output_file:
         output_file.write(raw_trips.content)
         
     num_rows = len(pd.read_parquet(constants.GREEN_TAXI_TRIPS_TEMPLATE_FILE_PATH.format(month_to_fetch)))
-
-    # Using the env to load the credentials to upload data to the ADLS2 
-    file_client = adls2.adls2_client.get_file_client(
-        file_system='data',
-        file_path=f'input_data/green_tripdata_{month_to_fetch}.parquet'
-    )
-    
-    # You need to use content, cause raw trips takes the get request only and not the file itself 
-    file_client.upload_data(raw_trips.content, overwrite=True)
 
     return dg.MaterializeResult(
       metadata={
@@ -195,3 +185,29 @@ def green_taxi_trips(context: dg.AssetExecutionContext, database: DuckDBResource
             "preview": dg.MetadataValue.md(preview_df.to_markdown(index=False)),
         }
     )
+    
+# Pushing the data into ADLS2
+@dg.asset(
+  deps=["green_taxi_trips_file"],
+  partitions_def = monthly_partition,
+  group_name="Cloud_Ingestion",
+  compute_kind="Azure",
+  )
+def green_taxi_trips_cloud(context: dg.AssetExecutionContext, adls2: ADLS2Resource) -> None:
+    """
+      The raw parquet files for the green taxi trips dataset.
+    """
+    # Choose the month to fetch from the URL
+    # This is to allow backfilling
+    partition_date_str = context.partition_key
+    month_to_fetch = partition_date_str[:-3]
+
+    # Using the env to load the credentials to upload data to the ADLS2 
+    file_client = adls2.adls2_client.get_file_client(
+        file_system='data',
+        file_path=f'input_data/green_tripdata_{month_to_fetch}.parquet'
+    )
+    # We load directly since we already have the local files in the first place
+    # Makes no sense to do a download and then push to cloud
+    with open(constants.GREEN_TAXI_TRIPS_TEMPLATE_FILE_PATH.format(month_to_fetch), 'rb') as file_data:
+      file_client.upload_data(file_data, overwrite=True)
