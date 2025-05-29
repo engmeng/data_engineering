@@ -9,6 +9,7 @@ from dagster_duckdb import DuckDBResource
 from dagster_azure.adls2 import ADLS2Resource, ADLS2SASToken
 from azure.storage.filedatalake import DataLakeFileClient
 import io
+from pyspark.sql import SparkSession
 
 @dg.asset(
   partitions_def = monthly_partition,
@@ -221,7 +222,7 @@ def green_taxi_trips_cloud(context: dg.AssetExecutionContext, adls2: ADLS2Resour
   )
 def green_taxi_trips_cloud_read(context: dg.AssetExecutionContext, adls2: ADLS2Resource) -> dg.MaterializeResult:
     """
-      Read the parquet files for the green taxi trips dataset.
+      Read the parquet files for the green taxi trips dataset directly from adls2.
     """
     # Choose the month to fetch from the URL
     # This is to allow backfilling
@@ -245,3 +246,47 @@ def green_taxi_trips_cloud_read(context: dg.AssetExecutionContext, adls2: ADLS2R
             }
         )
   
+# I want to see if we can do some delta table stuff in adls2 directly from here
+# But the first step is to push a new delta table first
+# So we can locally process the parquet file into the delta table
+# In this case maybe we try using the sql to pull the data from the duckdb into a pyspark dataframe
+# convert it to a delta table and then push the delta table into the datalake
+
+@dg.asset(
+    partitions_def=monthly_partition,
+    group_name="Local_Database",
+    compute_kind="spark",
+)
+def green_taxi_trips_delta_table(context: dg.AssetExecutionContext, database: DuckDBResource) -> None:
+    """
+      The raw taxi trips dataset taken from a DuckDB database and loaded into a delta table
+
+    """
+    partition_date_str = context.partition_key
+    month_to_fetch = partition_date_str[:-3]
+    
+    # Pull the query first
+    query = f"""      
+      SELECT
+      *
+      FROM green_trips
+      WHERE partition_date ='{month_to_fetch}'
+      LIMIT 10
+      ;
+    """
+    # 1. Initialize Spark with Delta support
+    spark = SparkSession.builder \
+        .appName("DuckDBToDelta") \
+        .config("spark.jars.packages", "io.delta:delta-core_2.12:2.4.0") \
+        .config("spark.sql.execution.arrow.pyspark.enabled", "true") \
+        .getOrCreate()
+        
+    with database.get_connection() as conn:
+        arrow_batches = conn.execute(query) # Returns Arrow batches
+        spark_df = spark.createDataFrame(arrow_batches)  # Arrow → Spark (optimized)
+    
+    delta_path = "data/staging/green_taxi_delta_table"
+    spark_df.write.format("delta").mode("overwrite").save(delta_path)
+
+# Now we want to be able to do some analysis of the data
+# We will check what is the spread of the fare amounts
