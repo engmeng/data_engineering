@@ -10,6 +10,7 @@ from dagster_azure.adls2 import ADLS2Resource, ADLS2SASToken
 from azure.storage.filedatalake import DataLakeFileClient
 import io
 from pyspark.sql import SparkSession
+from deltalake import DeltaTable, write_deltalake
 
 @dg.asset(
   partitions_def = monthly_partition,
@@ -255,7 +256,7 @@ def green_taxi_trips_cloud_read(context: dg.AssetExecutionContext, adls2: ADLS2R
 @dg.asset(
     partitions_def=monthly_partition,
     group_name="Local_Database",
-    compute_kind="spark",
+    compute_kind="deltalake",
 )
 def green_taxi_trips_delta_table(context: dg.AssetExecutionContext, database: DuckDBResource) -> None:
     """
@@ -274,19 +275,26 @@ def green_taxi_trips_delta_table(context: dg.AssetExecutionContext, database: Du
       LIMIT 10
       ;
     """
-    # 1. Initialize Spark with Delta support
-    spark = SparkSession.builder \
-        .appName("DuckDBToDelta") \
-        .config("spark.jars.packages", "io.delta:delta-core_2.12:2.4.0") \
-        .config("spark.sql.execution.arrow.pyspark.enabled", "true") \
-        .getOrCreate()
-        
+    # Writing via spark abit tricky
+    # Write to delta lake using native api
+    # Can slowly modify to allow for spark based approach
     with database.get_connection() as conn:
-        arrow_batches = conn.execute(query) # Returns Arrow batches
-        spark_df = spark.createDataFrame(arrow_batches)  # Arrow → Spark (optimized)
+      delta_df = conn.execute(query).df()
+      write_deltalake(f"data/staging/green_taxi_delta_table", delta_df,  partition_by=["partition_date"])
     
-    delta_path = "data/staging/green_taxi_delta_table"
-    spark_df.write.format("delta").mode("overwrite").save(delta_path)
+    # # 1. Initialize Spark with Delta support
+    # spark = SparkSession.builder \
+    #     .appName("DuckDBToDelta") \
+    #     .config("spark.jars.packages", "io.delta:delta-core_2.12:2.4.0") \
+    #     .config("spark.sql.execution.arrow.pyspark.enabled", "true") \
+    #     .getOrCreate()
+        
+    # with database.get_connection() as conn:
+    #     arrow_batches = conn.execute(query) # Returns Arrow batches
+    #     spark_df = spark.createDataFrame(arrow_batches)  # Arrow → Spark (optimized)
+    
+    # delta_path = "data/staging/green_taxi_delta_table"
+    # spark_df.write.format("delta").mode("overwrite").save(delta_path)
 
 # Now we want to be able to do some analysis of the data
 # We will check what is the spread of the fare amounts

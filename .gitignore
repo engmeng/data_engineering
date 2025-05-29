@@ -4,3 +4,4 @@
 *.parquet
 __pycache__
 *.duckdb
+*.json
