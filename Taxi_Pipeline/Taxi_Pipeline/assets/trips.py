@@ -8,6 +8,7 @@ import pandas as pd
 from dagster_duckdb import DuckDBResource
 from dagster_azure.adls2 import ADLS2Resource, ADLS2SASToken
 from azure.storage.filedatalake import DataLakeFileClient
+import io
 
 @dg.asset(
   partitions_def = monthly_partition,
@@ -211,3 +212,36 @@ def green_taxi_trips_cloud(context: dg.AssetExecutionContext, adls2: ADLS2Resour
     # Makes no sense to do a download and then push to cloud
     with open(constants.GREEN_TAXI_TRIPS_TEMPLATE_FILE_PATH.format(month_to_fetch), 'rb') as file_data:
       file_client.upload_data(file_data, overwrite=True)
+      
+# Ingest data from ADLS2 and allow checking for metadata to ensure we have the information
+@dg.asset(
+  partitions_def = monthly_partition,
+  group_name="Cloud_Read",
+  compute_kind="Azure",
+  )
+def green_taxi_trips_cloud_read(context: dg.AssetExecutionContext, adls2: ADLS2Resource) -> dg.MaterializeResult:
+    """
+      Read the parquet files for the green taxi trips dataset.
+    """
+    # Choose the month to fetch from the URL
+    # This is to allow backfilling
+    partition_date_str = context.partition_key
+    month_to_fetch = partition_date_str[:-3]
+
+    # Using the env to load the credentials to upload data to the ADLS2 
+    file_client = adls2.adls2_client.get_file_client(
+        file_system='data',
+        file_path=f'input_data/green_tripdata_{month_to_fetch}.parquet'
+    )
+    
+    # So now we need to read the data directly from ADLS2
+    downloaded_data = file_client.download_file()
+    file_content = downloaded_data.readall()
+    num_rows = len(pd.read_parquet(io.BytesIO(file_content)))
+    
+    return dg.MaterializeResult(
+      metadata={
+                'Number of records': dg.MetadataValue.int(num_rows)
+            }
+        )
+  
